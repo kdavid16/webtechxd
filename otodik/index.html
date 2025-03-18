@@ -1,0 +1,36 @@
+<html>
+  <head>
+    <title>DOM</title>
+    <link rel="stylesheet" type="text/css" href="styles.css">
+  </head>
+  <body>
+    <h1>DOM manipuláció JavaScript segítségével</h1>
+
+    <label for="teendok">Irj be egy teendot</label>
+    <input type="text" id="teendok" name="teendok"><br><br>
+    <input type="submit" value="Enter" id="submitBtn">
+
+    <table id="todoTable">
+        <tr>
+          <td>Teendok:</td>
+        </tr>
+      </table>
+
+      <script>
+        document.getElementById('submitBtn').addEventListener('click', function() {
+          var input = document.getElementById('teendok').value;
+          if (input) {
+            var table = document.getElementById('todoTable');
+            var newRow = table.insertRow();
+            var newCell = newRow.insertCell(0);
+            newCell.colSpan = 3;
+            newCell.textContent = input;
+            newCell.addEventListener('click', function() {
+              this.classList.toggle('completed');
+            });
+            document.getElementById('teendok').value = '';
+          }
+        });
+      </script>
+  </body>
+</html>
