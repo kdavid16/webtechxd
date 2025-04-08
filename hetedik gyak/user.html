@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git App - Felhasználó Keresés és Profil</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Stílusok a keresőhöz */
+        .user-search-form {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #e9ecef; /* Világosabb háttér a keresőnek */
+            border-radius: 5px;
+            display: flex; /* Gomb és input egymás mellett */
+            align-items: center; /* Vertikális igazítás */
+            gap: 10px; /* Térköz az elemek között */
+        }
+
+        .user-search-form label {
+            margin-bottom: 0; /* Flexbox miatt nem kell margó */
+            font-weight: bold;
+        }
+
+        .user-search-form input[type="text"] {
+             flex-grow: 1; /* Input töltse ki a helyet */
+             margin: 0; /* Flexbox miatt nem kell margó */
+        }
+         .user-search-form button {
+            margin: 0; /* Flexbox miatt nem kell margó */
+         }
+
+        /* Profilkártya stílusok (maradnak) */
+        .profile-card {
+            text-align: center;
+            /* Kezdetben elrejtjük, csak keresés után jelenik meg */
+            display: none;
+        }
+        .profile-card img {
+            border-radius: 50%;
+            width: 150px;
+            height: 150px;
+            object-fit: cover;
+            margin-bottom: 15px;
+            border: 3px solid #eee;
+        }
+        .profile-details p {
+            text-align: left;
+            margin-bottom: 0.5em;
+            /* Kezdetben elrejtjük */
+            display: none;
+        }
+         .profile-details p.bio {
+            font-style: italic;
+            color: #666;
+            text-align: center;
+            margin-top: 10px;
+            margin-bottom: 10px;
+         }
+        #loading-message, #error-message {
+            text-align: center;
+            margin-top: 20px;
+            display: none; /* Alapból rejtettek */
+        }
+         #error-message p {
+            color: #dc3545;
+            font-weight: bold;
+            display: block !important; /* Hibaüzenet mindig látszódjon ha az error-message div látszik */
+         }
+         /* Vissza linket most a nav.html kezel, innen töröljük */
+    </style>
+</head>
+<body>
+    <!-- A nav.html tartalma ide töltődik be az app.js segítségével -->
+
+    <div class="container">
+        <h1>GitHub Felhasználó Keresése</h1>
+
+        <!-- Kereső űrlap -->
+        <div class="user-search-form">
+            <label for="github-username-input">Felhasználónév:</label>
+            <input type="text" id="github-username-input" placeholder="Írd be a GitHub felhasználónevet...">
+            <button id="fetch-user-button" class="btn btn-primary">Keresés</button>
+        </div>
+
+        <!-- Üzenetek és Eredmények -->
+        <div id="search-results-area">
+             <div id="loading-message"><p>Adatok betöltése...</p></div>
+             <div id="error-message"><p></p></div>
+
+             <!-- Profil Kártya (eredmény) -->
+             <div id="profile-container" class="card profile-card">
+                 <!-- A tényleges profiladatok konténere -->
+                 <div id="user-info">
+                     <img id="user-avatar" src="" alt="Felhasználó avatárja">
+                     <h2 id="user-name"></h2>
+
+                     <div class="profile-details">
+                         <p id="user-bio-p" class="bio"></p>
+                         <p id="user-location-p"><strong>Hely:</strong> <span id="user-location"></span></p>
+                         <p id="user-blog-p"><strong>Blog/Weboldal:</strong> <a id="user-blog-link" href="#" target="_blank" rel="noopener noreferrer"></a></p>
+                         <p id="user-repos-p"><strong>Publikus repók:</strong> <span id="user-repos"></span></p>
+                         <p id="user-followers-p"><strong>Követők:</strong> <span id="user-followers"></span></p>
+                     </div>
+                 </div>
+                 <!-- A vissza linket a nav.html biztosítja, innen kivettük -->
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script> <!-- Fontos, hogy ez előbb legyen -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Elemek Kiválasztása ---
+            const usernameInput = document.getElementById('github-username-input');
+            const fetchButton = document.getElementById('fetch-user-button');
+            const resultsArea = document.getElementById('search-results-area'); // Konténer az üzenetekhez/kártyához
+            const loadingMessage = document.getElementById('loading-message');
+            const errorMessageElement = document.getElementById('error-message').querySelector('p');
+            const errorContainer = document.getElementById('error-message');
+            const profileCard = document.getElementById('profile-container'); // A teljes kártya
+            const userInfoDiv = document.getElementById('user-info'); // Csak az adatok része
+
+            // Profile details elements
+            const userAvatar = document.getElementById('user-avatar');
+            const userName = document.getElementById('user-name');
+            const userBioP = document.getElementById('user-bio-p');
+            const userLocationP = document.getElementById('user-location-p');
+            const userLocation = document.getElementById('user-location');
+            const userBlogP = document.getElementById('user-blog-p');
+            const userBlogLink = document.getElementById('user-blog-link');
+            const userReposP = document.getElementById('user-repos-p');
+            const userRepos = document.getElementById('user-repos');
+            const userFollowersP = document.getElementById('user-followers-p');
+            const userFollowers = document.getElementById('user-followers');
+
+             // --- Állapotkezelő Függvények ---
+             function showLoading() {
+                profileCard.style.display = 'none'; // Kártya elrejtése
+                errorContainer.style.display = 'none'; // Hiba elrejtése
+                loadingMessage.style.display = 'block'; // Töltés mutatása
+             }
+
+             function hideLoading() {
+                loadingMessage.style.display = 'none';
+             }
+
+            function showError(message) {
+                hideLoading(); // Töltés elrejtése
+                profileCard.style.display = 'none'; // Kártya elrejtése
+                errorMessageElement.textContent = message;
+                errorContainer.style.display = 'block'; // Hiba mutatása
+                console.error("API Hiba:", message);
+            }
+
+            // Az összes adatmező (p tag) elrejtése
+            function hideAllProfileDetails() {
+                 const detailParagraphs = profileCard.querySelectorAll('.profile-details p');
+                 detailParagraphs.forEach(p => p.style.display = 'none');
+            }
+
+            // --- Adatok Megjelenítése ---
+            function displayUserData(data) {
+                hideLoading();
+                errorContainer.style.display = 'none'; // Hiba elrejtése, ha volt
+                hideAllProfileDetails(); // Előző keresés adatainak elrejtése
+
+                // Avatar
+                userAvatar.src = data.avatar_url;
+                userAvatar.alt = `${data.login || 'Felhasználó'} avatárja`;
+
+                // Név
+                userName.textContent = data.name || data.login || 'Nincs név megadva';
+
+                // Bio
+                if (data.bio && data.bio.trim() !== '') {
+                    userBioP.textContent = data.bio;
+                    userBioP.style.display = 'block';
+                }
+
+                // Hely
+                if (data.location && data.location.trim() !== '') {
+                    userLocation.textContent = data.location;
+                    userLocationP.style.display = 'block';
+                }
+
+                // Blog
+                if (data.blog && data.blog.trim() !== '') {
+                    let blogUrl = data.blog;
+                    if (!blogUrl.startsWith('http://') && !blogUrl.startsWith('https://')) {
+                        blogUrl = 'http://' + blogUrl;
+                    }
+                    userBlogLink.href = blogUrl;
+                    userBlogLink.textContent = data.blog;
+                    userBlogP.style.display = 'block';
+                }
+
+                // Repók
+                if (data.public_repos !== null && typeof data.public_repos !== 'undefined') {
+                    userRepos.textContent = data.public_repos;
+                    userReposP.style.display = 'block';
+                }
+
+                // Követők
+                 if (data.followers !== null && typeof data.followers !== 'undefined') {
+                    userFollowers.textContent = data.followers;
+                    userFollowersP.style.display = 'block';
+                }
+
+                // Jelenítsük meg a profil kártyát
+                profileCard.style.display = 'block';
+            }
+
+             // --- Adatok Lekérése ---
+             function fetchUserData(username) {
+                // Token ellenőrzés (fontos!)
+                if (typeof GITHUB_ACCESS_TOKEN === 'undefined' || !GITHUB_ACCESS_TOKEN || GITHUB_ACCESS_TOKEN === 'githubtoken-t ide') {
+                     showError('GitHub API token nincs beállítva vagy érvénytelen az app.js fájlban!');
+                     return; // Ne is próbálja meg a hívást
+                 }
+
+                 showLoading(); // Töltési állapot mutatása
+
+                 const apiUrl = `https://api.github.com/users/${encodeURIComponent(username)}`;
+
+                 fetch(apiUrl, {
+                     headers: {
+                         'Authorization': `Bearer ${GITHUB_ACCESS_TOKEN}`,
+                         'Accept': 'application/vnd.github.v3+json'
+                     }
+                 })
+                 .then(response => {
+                     if (!response.ok) {
+                         if (response.status === 404) {
+                             throw new Error(`A(z) '${username}' felhasználó nem található.`);
+                         } else if (response.status === 403) {
+                             throw new Error('API Rátakorlát túllépve vagy érvénytelen token. Ellenőrizd a tokent az app.js-ben.');
+                         } else {
+                             throw new Error(`Hiba történt a lekérdezés során (${response.status})`);
+                         }
+                     }
+                     return response.json();
+                 })
+                 .then(data => {
+                     displayUserData(data); // Adatok megjelenítése
+                 })
+                 .catch(error => {
+                     showError(error.message || 'Ismeretlen hiba történt az adatok lekérése közben.');
+                 });
+            }
+
+            // --- Eseménykezelők ---
+            function handleSearch() {
+                 const username = usernameInput.value.trim();
+                 if (!username) {
+                    showError('Kérjük, írj be egy GitHub felhasználónevet!');
+                    // Optionally clear previous results if input is cleared
+                    // profileCard.style.display = 'none';
+                    return;
+                 }
+                 fetchUserData(username);
+            }
+
+            fetchButton.addEventListener('click', handleSearch);
+
+            usernameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    handleSearch();
+                }
+            });
+
+            // Kezdeti állapot: Nincs betöltés, nincs hiba, nincs kártya
+            // hideLoading(); // Alapból rejtettek a CSS miatt
+            // errorContainer.style.display = 'none';
+            // profileCard.style.display = 'none';
+
+        }); // End of DOMContentLoaded
+    </script>
+
+</body>
+</html>
